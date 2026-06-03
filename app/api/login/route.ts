@@ -1,43 +1,35 @@
-import { prisma } from "@/lib/prisma";
+// app/api/login/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-export async function POST(req: Request) {
-  const body = await req.json();
+const prisma = new PrismaClient();
 
-  const user = await prisma.user.findUnique({
-    where: {
-      email: body.email,
-    },
-  });
+export async function POST(request: NextRequest) {
+  try {
+    const { email, password } = await request.json();
 
-  if (!user) {
-    return Response.json(
-      {
-        success: false,
-        message: "User not found",
-      },
-      { status: 404 }
-    );
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return NextResponse.json({ success: false, message: "User not found" }, { status: 401 });
+    }
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isValid) {
+      return NextResponse.json({ success: false, message: "Invalid password" }, { status: 401 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      role: user.role,
+      name: user.name,
+      userId: user.id,
+    });
+  } catch (error) {
+    return NextResponse.json({ success: false, message: "Login failed" }, { status: 500 });
   }
-
-  const validPassword = await bcrypt.compare(
-    body.password,
-    user.passwordHash
-  );
-
-  if (!validPassword) {
-    return Response.json(
-      {
-        success: false,
-        message: "Wrong password",
-      },
-      { status: 401 }
-    );
-  }
-
-  return Response.json({
-    success: true,
-    role: user.role,
-    name: user.name,
-  });
 }
